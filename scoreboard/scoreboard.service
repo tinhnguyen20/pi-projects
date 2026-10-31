@@ -1,0 +1,17 @@
+[Unit]
+Description=Score viewer on the touch screen
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Change "admin" if your Pi username is different
+WorkingDirectory=/home/admin/scoreboard
+# Move the text console off the small screen so it doesn't draw over the scores
+ExecStartPre=-/bin/con2fbmap 1 0
+ExecStart=/usr/bin/python3 /home/admin/scoreboard/main.py
+Restart=always
+RestartSec=10
+User=root
+
+[Install]
+WantedBy=multi-user.target
