@@ -34,6 +34,7 @@ class App:
         self.view = "today"
         self.page = 0
         self.pages = 1                 # how many the last draw came to
+        self.page_shown_at = time.monotonic()
         self.last_image = None
 
     @property
@@ -65,6 +66,8 @@ class App:
             self.page = (self.page - 1) % self.pages
         elif event == "next":
             self.page = (self.page + 1) % self.pages
+        if event != "redraw":          # a new page gets its full time
+            self.page_shown_at = time.monotonic()
 
     def tap(self, x, y):
         action = display.action_at(x, y)
@@ -85,11 +88,29 @@ class App:
             b.when_pressed = lambda a=action: self.events.put(a)
             self._buttons.append(b)
 
+    # ----- turning pages -----
+    def next_page_in(self):
+        """Seconds until the page turns by itself, or None if it won't."""
+        if not config.PAGE_SECONDS:
+            return None
+        return max(0, self.page_shown_at + config.PAGE_SECONDS - time.monotonic())
+
+    def turn_page_if_due(self):
+        if self.next_page_in() == 0:
+            self.handle("next")
+
+    def wait_seconds(self):
+        """How long the main loop can sleep before the screen needs to change."""
+        left = self.next_page_in()
+        if left is None or self.pages < 2:
+            return CLOCK_REDRAW_SECONDS
+        return left % 1                # wake as the countdown reaches a whole second
+
     # ----- drawing -----
     def draw(self):
         games, updated, error = self.cache.latest(self.league, self.view)
-        img, self.pages = display.render(self.league, self.view, self.page,
-                                         games, updated, error)
+        img, self.pages = display.render(self.league, self.view, self.page, games,
+                                         updated, error, self.next_page_in())
         self.page %= self.pages
         sig = img.tobytes()
         if sig != self.last_image:      # only push changed frames
@@ -101,9 +122,10 @@ class App:
         threading.Thread(target=touch.run, args=(self.tap,), daemon=True).start()
         threading.Thread(target=self.keep_fresh, daemon=True).start()
         while True:
+            self.turn_page_if_due()
             self.draw()
             try:
-                self.handle(self.events.get(timeout=CLOCK_REDRAW_SECONDS))
+                self.handle(self.events.get(timeout=self.wait_seconds()))
             except queue.Empty:
                 pass
 
@@ -114,7 +136,8 @@ def demo():
     for league in ("nba", "nfl"):
         for view in ("today", "week"):
             games = sample_data.games(league, view)
-            img, _ = display.render(league, view, 0, games, datetime.now())
+            img, _ = display.render(league, view, 0, games, datetime.now(),
+                                    next_in=config.PAGE_SECONDS * 0.6 or None)
             img.save(f"preview_{league}_{view}.png")
     print("Wrote preview_*.png")
 

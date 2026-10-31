@@ -13,6 +13,10 @@ REFRESH_LIVE = 30        # while any game is in progress
 REFRESH_IDLE = 600       # when nothing is live
 REFRESH_WEEK = 900       # the week schedule changes slowly
 
+# How long each page of games stays up before the next one comes on (seconds).
+# After the last page it goes back to the first. 0 turns this off.
+PAGE_SECONDS = 12
+
 # Screen
 # Must match the real panel. 320, 240 for a 2.8" screen; 480, 320 or 320, 480
 # for a 3.5" one. A wrong size here scrambles the picture.

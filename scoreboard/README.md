@@ -21,9 +21,14 @@ The bar along the bottom of the screen has four buttons:
 | ◀ | Previous page |
 | ▶ | Next page |
 
+When there's more than one page of games, the pages turn by themselves and go
+back to the first after the last. The line above the buttons runs out as the
+next page gets closer, and the page number shows the seconds left (`2/4 · 12s`).
+Tapping a button restarts the wait.
+
 ## Install (on the Pi, over SSH)
 1. Copy this folder to the Pi, e.g. from your computer:
-   `scp -r scoreboard admin@192.168.1.130:~/`
+   `scp -r scoreboard admin@192.168.YYY.XXX:~/`
 2. Install what it needs:
    `sudo apt install -y python3-pil python3-numpy python3-evdev fonts-dejavu-core fbset`
 3. Set your time zone so game times are right:
@@ -43,8 +48,9 @@ sudo systemctl enable --now scoreboard
 Logs: `journalctl -u scoreboard -f`
 
 ## Customize
-Edit `config.py`: leagues, favorite teams, refresh times, and `FLIP = 180` if
-the picture is upside down.
+Edit `config.py`: leagues, favorite teams, refresh times, how long each page
+stays up (`PAGE_SECONDS`, 0 to stop pages turning by themselves), and
+`FLIP = 180` if the picture is upside down.
 
 ## Preview without the Pi
 `python3 main.py --demo` writes sample screens to `preview_*.png`. This needs

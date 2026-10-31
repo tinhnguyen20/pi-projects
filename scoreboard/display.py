@@ -8,6 +8,7 @@ Three things are used from outside this file:
 import os
 from datetime import datetime
 from functools import lru_cache
+from math import ceil
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -22,6 +23,7 @@ HEADER_H, STATUS_H, BAR_H = (24, 0, 34) if COMPACT else (32, 18, 48)
 FOOTER_H = STATUS_H + BAR_H
 AREA_H = H - HEADER_H - FOOTER_H         # where the games go
 EDGE = 8                                 # gap between text and the screen edge
+NEXT_PAGE_BAR_H = 3                      # sits at the top of the touch bar, above the buttons
 
 # Colors
 BG = (12, 14, 20)
@@ -71,11 +73,12 @@ FONT_ROW_BOLD = _font(14, True)
 FONT_MESSAGE = _font(20, True)
 
 
-def render(league, view, page, games, updated=None, error=False):
+def render(league, view, page, games, updated=None, error=False, next_in=None):
     """Draw one page of a view ("today" or "week"). Returns (image, page_count).
 
     games is None if nothing has been downloaded yet. A page past the end
     wraps around, so a page number stays safe when the games change.
+    next_in is the seconds until the page turns by itself, or None if it won't.
     """
     if games is None and not error:
         img, draw = _frame(league, view, 0, 1, None, False)
@@ -84,7 +87,9 @@ def render(league, view, page, games, updated=None, error=False):
     games = games or []
     pages = _today_pages(games) if view == "today" else _week_pages(games)
     page %= len(pages)
-    img, draw = _frame(league, view, page, len(pages), updated, error)
+    if len(pages) < 2:
+        next_in = None                   # nothing to turn to
+    img, draw = _frame(league, view, page, len(pages), updated, error, next_in)
     if not games:
         _no_games_message(draw, view, error)
     elif view == "today":
@@ -114,19 +119,21 @@ def _is_favorite(g):
 
 
 # ---------- shared chrome ----------
-def _frame(league, view, page, pages, updated, error):
+def _frame(league, view, page, pages, updated, error, next_in=None):
     """A blank screen with everything except the games drawn on it."""
     img = Image.new("RGB", (W, H), BG)
     draw = ImageDraw.Draw(img)
-    _header(draw, league, view, page, pages, error)
+    _header(draw, league, view, page, pages, error, next_in)
     draw.rectangle((0, H - FOOTER_H, W, H), fill=PANEL)
     if STATUS_H:
-        _status_strip(draw, page, pages, updated, error)
+        _status_strip(draw, page, pages, updated, error, next_in)
     _touch_bar(draw, league, view, pages)
+    if next_in is not None:
+        _next_page_bar(draw, league, next_in)
     return img, draw
 
 
-def _header(draw, league, view, page, pages, error):
+def _header(draw, league, view, page, pages, error, next_in):
     accent = ACCENT.get(league, TEXT)
     draw.rectangle((0, 0, W, HEADER_H - 1), fill=PANEL)
     draw.rectangle((0, HEADER_H - 2, W, HEADER_H - 1), fill=accent)
@@ -141,14 +148,20 @@ def _header(draw, league, view, page, pages, error):
         return
     right = scores.clock(datetime.now())
     if not STATUS_H and pages > 1:
-        right = f"{page + 1}/{pages}   " + right
+        right = f"{page + 1}/{pages}{_seconds_left(next_in)}   " + right
     _draw_right(draw, W - EDGE, y + 2, right, FONT_SMALL, DIM)
 
 
-def _status_strip(draw, page, pages, updated, error):
+def _seconds_left(next_in):
+    """Goes after the page number. Short: the header has little room to spare."""
+    return "" if next_in is None else f" · {ceil(next_in)}s"
+
+
+def _status_strip(draw, page, pages, updated, error, next_in):
     y = H - FOOTER_H + 2
     if pages > 1:
-        draw.text((EDGE, y), f"Page {page + 1} of {pages}", font=FONT_SMALL, fill=DIM)
+        draw.text((EDGE, y), f"Page {page + 1} of {pages}{_seconds_left(next_in)}",
+                  font=FONT_SMALL, fill=DIM)
     if error:
         _draw_right(draw, W - EDGE, y, "offline", FONT_SMALL_BOLD, LIVE)
     elif updated:
@@ -156,7 +169,7 @@ def _status_strip(draw, page, pages, updated, error):
 
 
 def _touch_bar(draw, league, view, pages):
-    y0, y1 = H - BAR_H + 3, H - 4
+    y0, y1 = H - BAR_H + NEXT_PAGE_BAR_H + 1, H - 4
     n = len(BAR_ACTIONS)
     for i, action in enumerate(BAR_ACTIONS):
         x0, x1 = i * W // n + 3, (i + 1) * W // n - 4
@@ -172,6 +185,14 @@ def _touch_bar(draw, league, view, pages):
             tip = -8 if action == "prev" else 8
             draw.polygon(((cx - tip, cy - 9), (cx - tip, cy + 9), (cx + tip, cy)),
                          fill=TEXT if pages > 1 else DIM)
+
+
+def _next_page_bar(draw, league, next_in):
+    """A line above the touch bar that runs out when the next page comes on."""
+    y0, y1 = H - BAR_H, H - BAR_H + NEXT_PAGE_BAR_H - 1
+    draw.rectangle((0, y0, W, y1), fill=BG)
+    draw.rectangle((0, y0, int(W * next_in / config.PAGE_SECONDS), y1),
+                   fill=ACCENT.get(league, TEXT))
 
 
 def _message(draw, title, sub=""):
