@@ -1,7 +1,6 @@
 """Push finished images to the screen's framebuffer."""
 import glob
 import os
-import numpy as np
 
 import config
 
@@ -50,6 +49,7 @@ def _to_bytes(img, bpp):
     if bpp == 32:
         return img.convert("RGBA").tobytes("raw", "BGRA")
     try:
+        import numpy as np
         a = np.asarray(img, dtype=np.uint16)
         v = ((a[:, :, 0] >> 3) << 11) | ((a[:, :, 1] >> 2) << 5) | (a[:, :, 2] >> 3)
         return v.astype("<u2").tobytes()
